@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import ReactECharts from 'echarts-for-react';
 import {
   BarChart3,
@@ -13,17 +13,37 @@ import {
   Printer,
 } from 'lucide-react';
 import { useAppStore } from '@/store';
+import type { StatisticsData } from '@/types';
 import { formatNumber } from '@/utils';
 
 const Reports = () => {
-  const getStatistics = useAppStore((s) => s.getStatistics);
-  const stats = useMemo(() => getStatistics(), [getStatistics]);
+  const fetchStatistics = useAppStore((s) => s.fetchStatistics);
+  const [stats, setStats] = useState<StatisticsData | null>(null);
   const customers = useAppStore((s) => s.customers);
   const nodes = useAppStore((s) => s.nodes);
   const reportRef = useRef<HTMLDivElement>(null);
 
   const [region, setRegion] = useState('all');
   const [timeRange, setTimeRange] = useState('month');
+
+  useEffect(() => {
+    const loadStats = async () => {
+      const data = await fetchStatistics();
+      setStats(data);
+    };
+    loadStats();
+  }, [fetchStatistics]);
+
+  if (!stats) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="w-10 h-10 border-4 border-navy-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+          <p className="text-gray-500 text-sm">加载统计数据中...</p>
+        </div>
+      </div>
+    );
+  }
 
   const regions = Array.from(new Set(customers.map((c) => c.region)));
 

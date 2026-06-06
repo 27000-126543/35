@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import ReactECharts from 'echarts-for-react';
 import {
   Flame,
@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import PipelineMap from '@/components/map/PipelineMap';
 import { useAppStore } from '@/store';
+import type { StatisticsData } from '@/types';
 import {
   formatNumber,
   getAlarmLevelColor,
@@ -23,8 +24,8 @@ import {
 } from '@/utils';
 
 const Dashboard = () => {
-  const getStatistics = useAppStore((s) => s.getStatistics);
-  const stats = useMemo(() => getStatistics(), [getStatistics]);
+  const fetchStatistics = useAppStore((s) => s.fetchStatistics);
+  const [stats, setStats] = useState<StatisticsData | null>(null);
   const alarms = useAppStore((s) => s.alarms);
   const nodes = useAppStore((s) => s.nodes);
   const stations = useAppStore((s) => s.stations);
@@ -32,9 +33,28 @@ const Dashboard = () => {
   const [, forceUpdate] = useState(0);
 
   useEffect(() => {
+    const loadStats = async () => {
+      const data = await fetchStatistics();
+      setStats(data);
+    };
+    loadStats();
+  }, [fetchStatistics]);
+
+  useEffect(() => {
     const timer = setInterval(() => forceUpdate((v) => v + 1), 5000);
     return () => clearInterval(timer);
   }, []);
+
+  if (!stats) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="w-10 h-10 border-4 border-navy-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+          <p className="text-gray-500 text-sm">加载统计数据中...</p>
+        </div>
+      </div>
+    );
+  }
 
   const totalOutput = stations.reduce((sum, s) => sum + s.currentOutput, 0);
   const normalNodes = nodes.filter((n) => n.status === 'normal').length;

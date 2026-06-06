@@ -14,21 +14,50 @@ import type {
   StatisticsData,
 } from '@/types';
 import {
-  mockStations,
-  mockNodes,
-  mockCustomers,
-  mockDispatchPlans,
-  mockAlarms,
-  mockRepairOrders,
-  mockRepairTeams,
-  mockRepairVehicles,
-  mockRepairTickets,
-  mockMaintenanceWorkers,
-  mockUser,
-} from '@/data';
+  getStations,
+  getNodes,
+  getCustomers,
+  getDispatchPlans,
+  getAlarms,
+  getRepairOrders,
+  getRepairTeams,
+  getRepairVehicles,
+  getRepairTickets,
+  getWorkers,
+  getStatistics,
+  createStation,
+  updateStation,
+  deleteStation,
+  createNode,
+  updateNode,
+  deleteNode,
+  updateNodePressure,
+  createCustomer,
+  updateCustomer,
+  deleteCustomer,
+  createDispatchPlan,
+  updateDispatchPlan,
+  updateDispatchPlanStatus,
+  acknowledgeAlarm,
+  resolveAlarm as resolveAlarmApi,
+  createRepairOrder,
+  updateRepairOrder,
+  createRepairTicket,
+  dispatchRepairTicket,
+  completeRepairTicket as completeRepairTicketApi,
+} from '@/api';
+
+const mockUser: AuthUser = {
+  id: 'u001',
+  name: '张调度',
+  role: 'dispatcher',
+  department: '调度运营中心',
+};
 
 interface AppState {
   currentUser: AuthUser;
+  loading: boolean;
+  initialized: boolean;
   stations: GasStation[];
   nodes: PipelineNode[];
   customers: Customer[];
@@ -40,267 +69,235 @@ interface AppState {
   repairTickets: RepairTicket[];
   maintenanceWorkers: MaintenanceWorker[];
 
-  addStation: (station: GasStation) => void;
-  updateStation: (id: string, data: Partial<GasStation>) => void;
-  deleteStation: (id: string) => void;
+  fetchAll: () => Promise<void>;
+  fetchStatistics: () => Promise<StatisticsData>;
 
-  addNode: (node: PipelineNode) => void;
-  updateNode: (id: string, data: Partial<PipelineNode>) => void;
-  deleteNode: (id: string) => void;
+  addStation: (station: GasStation) => Promise<void>;
+  updateStation: (id: string, data: Partial<GasStation>) => Promise<void>;
+  deleteStation: (id: string) => Promise<void>;
 
-  addCustomer: (customer: Customer) => void;
-  updateCustomer: (id: string, data: Partial<Customer>) => void;
-  deleteCustomer: (id: string) => void;
+  addNode: (node: PipelineNode) => Promise<void>;
+  updateNode: (id: string, data: Partial<PipelineNode>) => Promise<void>;
+  deleteNode: (id: string) => Promise<void>;
 
-  addDispatchPlan: (plan: DispatchPlan) => void;
-  updateDispatchPlan: (id: string, data: Partial<DispatchPlan>) => void;
-  confirmDispatchPlan: (id: string, dispatcherId: string, dispatcherName: string) => void;
-  requestAdjustPlan: (id: string, reason: string, dispatcherId: string, dispatcherName: string) => void;
-  approvePlan: (id: string, supervisorId: string, supervisorName: string) => void;
-  rejectPlan: (id: string, supervisorId: string, supervisorName: string) => void;
-  pushPlan: (id: string) => void;
+  addCustomer: (customer: Customer) => Promise<void>;
+  updateCustomer: (id: string, data: Partial<Customer>) => Promise<void>;
+  deleteCustomer: (id: string) => Promise<void>;
 
-  addAlarm: (alarm: EmergencyAlarm) => void;
-  updateAlarm: (id: string, data: Partial<EmergencyAlarm>) => void;
-  confirmAlarm: (id: string, handlerId: string, handlerName: string) => void;
-  resolveAlarm: (id: string) => void;
+  addDispatchPlan: (plan: DispatchPlan) => Promise<void>;
+  updateDispatchPlan: (id: string, data: Partial<DispatchPlan>) => Promise<void>;
+  confirmDispatchPlan: (id: string, dispatcherId: string, dispatcherName: string) => Promise<void>;
+  requestAdjustPlan: (id: string, reason: string, dispatcherId: string, dispatcherName: string) => Promise<void>;
+  approvePlan: (id: string, supervisorId: string, supervisorName: string) => Promise<void>;
+  rejectPlan: (id: string, supervisorId: string, supervisorName: string) => Promise<void>;
+  pushPlan: (id: string) => Promise<void>;
 
-  addRepairOrder: (order: RepairOrder) => void;
-  updateRepairOrder: (id: string, data: Partial<RepairOrder>) => void;
+  addAlarm: (alarm: EmergencyAlarm) => Promise<void>;
+  updateAlarm: (id: string, data: Partial<EmergencyAlarm>) => Promise<void>;
+  confirmAlarm: (id: string, handlerId: string, handlerName: string) => Promise<void>;
+  resolveAlarm: (id: string) => Promise<void>;
 
-  addRepairTicket: (ticket: RepairTicket) => void;
-  updateRepairTicket: (id: string, data: Partial<RepairTicket>) => void;
-  assignRepairTicket: (id: string, workerId: string, workerName: string, workerPhone: string) => void;
-  completeRepairTicket: (id: string, result: string) => void;
+  addRepairOrder: (order: RepairOrder) => Promise<void>;
+  updateRepairOrder: (id: string, data: Partial<RepairOrder>) => Promise<void>;
 
-  simulateNodePressureUpdate: () => void;
-  getStatistics: () => StatisticsData;
+  addRepairTicket: (ticket: RepairTicket) => Promise<void>;
+  updateRepairTicket: (id: string, data: Partial<RepairTicket>) => Promise<void>;
+  assignRepairTicket: (id: string, workerId: string, workerName: string, workerPhone: string) => Promise<void>;
+  completeRepairTicket: (id: string, result: string) => Promise<void>;
+
+  simulateNodePressureUpdate: () => Promise<void>;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
   currentUser: mockUser,
-  stations: mockStations,
-  nodes: mockNodes,
-  customers: mockCustomers,
-  dispatchPlans: mockDispatchPlans,
-  alarms: mockAlarms,
-  repairOrders: mockRepairOrders,
-  repairTeams: mockRepairTeams,
-  repairVehicles: mockRepairVehicles,
-  repairTickets: mockRepairTickets,
-  maintenanceWorkers: mockMaintenanceWorkers,
+  loading: false,
+  initialized: false,
+  stations: [],
+  nodes: [],
+  customers: [],
+  dispatchPlans: [],
+  alarms: [],
+  repairOrders: [],
+  repairTeams: [],
+  repairVehicles: [],
+  repairTickets: [],
+  maintenanceWorkers: [],
 
-  addStation: (station) => set((s) => ({ stations: [...s.stations, station] })),
-  updateStation: (id, data) =>
-    set((s) => ({
-      stations: s.stations.map((st) => (st.id === id ? { ...st, ...data } : st)),
-    })),
-  deleteStation: (id) => set((s) => ({ stations: s.stations.filter((st) => st.id !== id) })),
-
-  addNode: (node) => set((s) => ({ nodes: [...s.nodes, node] })),
-  updateNode: (id, data) =>
-    set((s) => ({
-      nodes: s.nodes.map((n) => (n.id === id ? { ...n, ...data } : n)),
-    })),
-  deleteNode: (id) => set((s) => ({ nodes: s.nodes.filter((n) => n.id !== id) })),
-
-  addCustomer: (customer) => set((s) => ({ customers: [...s.customers, customer] })),
-  updateCustomer: (id, data) =>
-    set((s) => ({
-      customers: s.customers.map((c) => (c.id === id ? { ...c, ...data } : c)),
-    })),
-  deleteCustomer: (id) => set((s) => ({ customers: s.customers.filter((c) => c.id !== id) })),
-
-  addDispatchPlan: (plan) => set((s) => ({ dispatchPlans: [...s.dispatchPlans, plan] })),
-  updateDispatchPlan: (id, data) =>
-    set((s) => ({
-      dispatchPlans: s.dispatchPlans.map((p) => (p.id === id ? { ...p, ...data } : p)),
-    })),
-  confirmDispatchPlan: (id, dispatcherId, dispatcherName) =>
-    set((s) => ({
-      dispatchPlans: s.dispatchPlans.map((p) =>
-        p.id === id ? { ...p, status: 'confirmed', dispatcherId, dispatcherName } : p
-      ),
-    })),
-  requestAdjustPlan: (id, reason, dispatcherId, dispatcherName) =>
-    set((s) => ({
-      dispatchPlans: s.dispatchPlans.map((p) =>
-        p.id === id
-          ? { ...p, status: 'adjust_requested', adjustReason: reason, dispatcherId, dispatcherName }
-          : p
-      ),
-    })),
-  approvePlan: (id, supervisorId, supervisorName) =>
-    set((s) => ({
-      dispatchPlans: s.dispatchPlans.map((p) =>
-        p.id === id ? { ...p, status: 'approved', supervisorId, supervisorName } : p
-      ),
-    })),
-  rejectPlan: (id, supervisorId, supervisorName) =>
-    set((s) => ({
-      dispatchPlans: s.dispatchPlans.map((p) =>
-        p.id === id ? { ...p, status: 'rejected', supervisorId, supervisorName } : p
-      ),
-    })),
-  pushPlan: (id) =>
-    set((s) => ({
-      dispatchPlans: s.dispatchPlans.map((p) => (p.id === id ? { ...p, pushStatus: 'pushed' } : p)),
-    })),
-
-  addAlarm: (alarm) => set((s) => ({ alarms: [...s.alarms, alarm] })),
-  updateAlarm: (id, data) =>
-    set((s) => ({
-      alarms: s.alarms.map((a) => (a.id === id ? { ...a, ...data } : a)),
-    })),
-  confirmAlarm: (id, handlerId, handlerName) =>
-    set((s) => ({
-      alarms: s.alarms.map((a) =>
-        a.id === id
-          ? {
-              ...a,
-              status: 'processing',
-              confirmedAt: new Date().toISOString().replace('T', ' ').slice(0, 19),
-              handlerId,
-              handlerName,
-            }
-          : a
-      ),
-    })),
-  resolveAlarm: (id) =>
-    set((s) => ({
-      alarms: s.alarms.map((a) =>
-        a.id === id
-          ? {
-              ...a,
-              status: 'resolved',
-              resolvedAt: new Date().toISOString().replace('T', ' ').slice(0, 19),
-            }
-          : a
-      ),
-    })),
-
-  addRepairOrder: (order) => set((s) => ({ repairOrders: [...s.repairOrders, order] })),
-  updateRepairOrder: (id, data) =>
-    set((s) => ({
-      repairOrders: s.repairOrders.map((o) => (o.id === id ? { ...o, ...data } : o)),
-    })),
-
-  addRepairTicket: (ticket) => set((s) => ({ repairTickets: [...s.repairTickets, ticket] })),
-  updateRepairTicket: (id, data) =>
-    set((s) => ({
-      repairTickets: s.repairTickets.map((t) => (t.id === id ? { ...t, ...data } : t)),
-    })),
-  assignRepairTicket: (id, workerId, workerName, workerPhone) =>
-    set((s) => ({
-      repairTickets: s.repairTickets.map((t) =>
-        t.id === id
-          ? {
-              ...t,
-              status: 'assigned',
-              workerId,
-              workerName,
-              workerPhone,
-              assignedAt: new Date().toISOString().replace('T', ' ').slice(0, 19),
-            }
-          : t
-      ),
-    })),
-  completeRepairTicket: (id, result) =>
-    set((s) => ({
-      repairTickets: s.repairTickets.map((t) =>
-        t.id === id
-          ? {
-              ...t,
-              status: 'completed',
-              result,
-              completedAt: new Date().toISOString().replace('T', ' ').slice(0, 19),
-            }
-          : t
-      ),
-    })),
-
-  simulateNodePressureUpdate: () => {
-    const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
-    set((s) => ({
-      nodes: s.nodes.map((node) => {
-        if (node.status === 'leak' || node.status === 'repair' || node.status === 'offline') return node;
-        const fluctuation = (Math.random() - 0.5) * 0.1;
-        const newPressure = Math.max(node.minPressure, Math.min(node.maxPressure, node.currentPressure + fluctuation));
-        let status: typeof node.status = 'normal';
-        if (newPressure < node.minPressure * 1.05) status = 'low_pressure';
-        else if (newPressure > node.maxPressure * 0.95) status = 'high_pressure';
-        return { ...node, currentPressure: Number(newPressure.toFixed(2)), status, lastUpdate: now };
-      }),
-    }));
+  fetchAll: async () => {
+    set({ loading: true });
+    try {
+      const [
+        stations,
+        nodes,
+        customers,
+        dispatchPlans,
+        alarms,
+        repairOrders,
+        repairTeams,
+        repairVehicles,
+        repairTickets,
+        maintenanceWorkers,
+      ] = await Promise.all([
+        getStations(),
+        getNodes(),
+        getCustomers(),
+        getDispatchPlans(),
+        getAlarms(),
+        getRepairOrders(),
+        getRepairTeams(),
+        getRepairVehicles(),
+        getRepairTickets(),
+        getWorkers(),
+      ]);
+      set({
+        stations,
+        nodes,
+        customers,
+        dispatchPlans,
+        alarms,
+        repairOrders,
+        repairTeams,
+        repairVehicles,
+        repairTickets,
+        maintenanceWorkers,
+        initialized: true,
+      });
+    } finally {
+      set({ loading: false });
+    }
   },
 
-  getStatistics: () => {
-    const state = get();
-    const totalCustomers = state.customers;
-    const totalGasSupply = totalCustomers.reduce((sum, c) => sum + c.dailyGasUsage, 0);
-    const qualifiedNodes = state.nodes.filter(
-      (n) => n.status === 'normal' && n.currentPressure >= n.minPressure && n.currentPressure <= n.maxPressure
-    );
-    const pressureQualifiedRate = state.nodes.length > 0 ? (qualifiedNodes.length / state.nodes.length) * 100 : 0;
+  fetchStatistics: async () => {
+    return await getStatistics();
+  },
 
-    const completedRepairs = state.repairOrders.filter((o) => o.status === 'completed');
-    const totalRepairs = state.repairOrders.filter((o) => o.status !== 'cancelled');
-    const repairOnTimeRate = totalRepairs.length > 0 ? (completedRepairs.length / totalRepairs.length) * 100 : 95;
+  addStation: async (station) => {
+    await createStation(station);
+    set({ stations: await getStations() });
+  },
+  updateStation: async (id, data) => {
+    await updateStation(id, data);
+    set({ stations: await getStations() });
+  },
+  deleteStation: async (id) => {
+    await deleteStation(id);
+    set({ stations: await getStations() });
+  },
 
-    const regions = Array.from(new Set(state.customers.map((c) => c.region)));
-    const byRegion = regions.map((region) => ({
-      region,
-      gasSupply: state.customers.filter((c) => c.region === region).reduce((sum, c) => sum + c.dailyGasUsage, 0),
+  addNode: async (node) => {
+    await createNode(node);
+    set({ nodes: await getNodes() });
+  },
+  updateNode: async (id, data) => {
+    await updateNode(id, data);
+    set({ nodes: await getNodes() });
+  },
+  deleteNode: async (id) => {
+    await deleteNode(id);
+    set({ nodes: await getNodes() });
+  },
+
+  addCustomer: async (customer) => {
+    await createCustomer(customer);
+    set({ customers: await getCustomers() });
+  },
+  updateCustomer: async (id, data) => {
+    await updateCustomer(id, data);
+    set({ customers: await getCustomers() });
+  },
+  deleteCustomer: async (id) => {
+    await deleteCustomer(id);
+    set({ customers: await getCustomers() });
+  },
+
+  addDispatchPlan: async (plan) => {
+    await createDispatchPlan(plan);
+    set({ dispatchPlans: await getDispatchPlans() });
+  },
+  updateDispatchPlan: async (id, data) => {
+    await updateDispatchPlan(id, data);
+    set({ dispatchPlans: await getDispatchPlans() });
+  },
+  confirmDispatchPlan: async (id, dispatcherId, dispatcherName) => {
+    await updateDispatchPlanStatus(id, 'confirmed', undefined, dispatcherName);
+    set({ dispatchPlans: await getDispatchPlans() });
+  },
+  requestAdjustPlan: async (id, reason, dispatcherId, dispatcherName) => {
+    await updateDispatchPlanStatus(id, 'adjust_requested', reason, dispatcherName);
+    set({ dispatchPlans: await getDispatchPlans() });
+  },
+  approvePlan: async (id, supervisorId, supervisorName) => {
+    await updateDispatchPlanStatus(id, 'approved', undefined, supervisorName);
+    set({ dispatchPlans: await getDispatchPlans() });
+  },
+  rejectPlan: async (id, supervisorId, supervisorName) => {
+    await updateDispatchPlanStatus(id, 'rejected', undefined, supervisorName);
+    set({ dispatchPlans: await getDispatchPlans() });
+  },
+  pushPlan: async (id) => {
+    await updateDispatchPlanStatus(id, 'pushed');
+    set({ dispatchPlans: await getDispatchPlans() });
+  },
+
+  addAlarm: async (alarm) => {
+    set({ alarms: [...get().alarms, alarm] });
+  },
+  updateAlarm: async (id, data) => {
+    set((s) => ({
+      alarms: s.alarms.map((a) => (a.id === id ? { ...a, ...data } : a)),
     }));
+  },
+  confirmAlarm: async (id, handlerId, handlerName) => {
+    await acknowledgeAlarm(id, handlerName);
+    set({ alarms: await getAlarms() });
+  },
+  resolveAlarm: async (id) => {
+    await resolveAlarmApi(id, get().currentUser.name);
+    set({ alarms: await getAlarms() });
+  },
 
-    const userTypes: Array<'industrial' | 'commercial' | 'residential'> = ['industrial', 'commercial', 'residential'];
-    const byUserType = userTypes.map((type) => {
-      const supply = state.customers.filter((c) => c.type === type).reduce((sum, c) => sum + c.dailyGasUsage, 0);
-      return {
-        type,
-        gasSupply: supply,
-        percentage: totalGasSupply > 0 ? (supply / totalGasSupply) * 100 : 0,
-      };
-    });
+  addRepairOrder: async (order) => {
+    await createRepairOrder(order);
+    set({ repairOrders: await getRepairOrders() });
+  },
+  updateRepairOrder: async (id, data) => {
+    await updateRepairOrder(id, data);
+    set({ repairOrders: await getRepairOrders() });
+  },
 
-    const today = new Date();
-    const dailySupply = Array.from({ length: 7 }).map((_, i) => {
-      const d = new Date(today);
-      d.setDate(today.getDate() - (6 - i));
-      return {
-        date: `${d.getMonth() + 1}/${d.getDate()}`,
-        supply: Math.round(totalGasSupply * (0.9 + Math.random() * 0.2)),
-      };
-    });
-
-    const alarmTypes: Array<'pressure_low' | 'pressure_high' | 'leak' | 'equipment_fault'> = [
-      'pressure_low',
-      'pressure_high',
-      'leak',
-      'equipment_fault',
-    ];
-    const alarmCounts = alarmTypes.map((type) => ({
-      type,
-      count: state.alarms.filter((a) => a.type === type).length,
+  addRepairTicket: async (ticket) => {
+    await createRepairTicket(ticket);
+    set({ repairTickets: await getRepairTickets() });
+  },
+  updateRepairTicket: async (id, data) => {
+    set((s) => ({
+      repairTickets: s.repairTickets.map((t) => (t.id === id ? { ...t, ...data } : t)),
     }));
+  },
+  assignRepairTicket: async (id, workerId, workerName, workerPhone) => {
+    await dispatchRepairTicket(id, workerId);
+    set({ repairTickets: await getRepairTickets() });
+  },
+  completeRepairTicket: async (id, result) => {
+    await completeRepairTicketApi(id, result);
+    set({ repairTickets: await getRepairTickets() });
+  },
 
-    const nodePressures = state.nodes.map((n) => n.currentPressure);
-    const avgPressure = nodePressures.length > 0 ? nodePressures.reduce((a, b) => a + b, 0) / nodePressures.length : 0;
-
-    return {
-      dateRange: {
-        start: new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        end: today.toISOString().split('T')[0],
-      },
-      totalGasSupply: totalGasSupply / 10000,
-      avgPressure: Number(avgPressure.toFixed(2)),
-      pressureQualifiedRate: Number(pressureQualifiedRate.toFixed(1)),
-      repairOnTimeRate: Number(repairOnTimeRate.toFixed(1)),
-      gasLossRate: 2.8,
-      byRegion,
-      byUserType,
-      dailySupply,
-      alarmCounts,
-    };
+  simulateNodePressureUpdate: async () => {
+    const nodes = get().nodes;
+    const updates = nodes.map(async (node) => {
+      if (node.status === 'leak' || node.status === 'repair' || node.status === 'offline') return;
+      const fluctuation = (Math.random() - 0.5) * 0.1;
+      const newPressure = Math.max(
+        node.minPressure,
+        Math.min(node.maxPressure, node.currentPressure + fluctuation)
+      );
+      let status: typeof node.status = 'normal';
+      if (newPressure < node.minPressure * 1.05) status = 'low_pressure';
+      else if (newPressure > node.maxPressure * 0.95) status = 'high_pressure';
+      await updateNodePressure(node.id, Number(newPressure.toFixed(2)), status);
+    });
+    await Promise.all(updates);
+    set({ nodes: await getNodes() });
   },
 }));

@@ -1,0 +1,21 @@
+{
+  "name": "gas-dispatch-server",
+  "version": "1.0.0",
+  "description": "城市燃气输配智能调度后端服务",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js",
+    "init-db": "node db/init.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "sql.js": "^1.10.3",
+    "morgan": "^1.10.0",
+    "uuid": "^11.0.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}

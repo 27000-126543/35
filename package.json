@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:server": "cd server && node app.js",
+    "dev:init-db": "cd server && node db/init.js",
+    "dev:all": "npm run dev:init-db && (npm run dev:server & npm run dev)",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
